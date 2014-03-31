@@ -62,17 +62,17 @@ class LCD:
         # an explicit GPIO interface to use
         if not GPIO:
             import RPi.GPIO as GPIO
-            self.GPIO = GPIO
-            self.pin_rs = pin_rs
-            self.pin_e = pin_e
-            self.pins_db = pins_db
-    
-            self.GPIO.setmode(GPIO.BCM)
-            self.GPIO.setup(self.pin_e, GPIO.OUT)
-            self.GPIO.setup(self.pin_rs, GPIO.OUT)
-    
-            for pin in self.pins_db:
-                self.GPIO.setup(pin, GPIO.OUT)
+        self.GPIO = GPIO
+        self.pin_rs = pin_rs
+        self.pin_e = pin_e
+        self.pins_db = pins_db
+
+        #self.GPIO.setmode(GPIO.BCM)
+        self.GPIO.setup(self.pin_e, GPIO.OUT)
+        self.GPIO.setup(self.pin_rs, GPIO.OUT)
+
+        for pin in self.pins_db:
+            self.GPIO.setup(pin, GPIO.OUT)
     
         self.write4bits(0x33) # initialization
         self.write4bits(0x32) # initialization
@@ -256,7 +256,7 @@ class LCD:
 
 if __name__ == '__main__':
 
-    lcd = Adafruit_CharLCD()
+    lcd = LCD()
 
     lcd.clear()
     lcd.message("  Adafruit 16x2\n  Standard LCD")
