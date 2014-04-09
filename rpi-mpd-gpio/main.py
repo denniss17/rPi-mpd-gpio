@@ -4,12 +4,22 @@ from mpd import MPDClient, ConnectionError
 from Timer import Timer
 from Screen import *
 
+''' MPD settings '''
 MPD_ADDRESS = "localhost"
 MPD_PORT = 6600
-PIN_PAUZE_PLAY = 21
-POLLING_INTERVAL = 0.5 # in s
-SCREEN_UPDATE_INTERVAL = 1 # in s
-BUTTON_BOUNCETIME = 200 # in ms
+
+''' Pin numbers '''
+PIN_PAUZE_PLAY = 19
+PIN_VOLUME_UP = 21
+PIN_VOLUME_DOWN = 23
+PIN_LEFT = 24
+PIN_RIGHT = 26
+PIN_MENU = 12
+
+''' Timing settings '''
+POLLING_INTERVAL = 0.5 # Time (in s) between mpd status pollings
+SCREEN_UPDATE_INTERVAL = 1 # Time (in s) between screen updates
+BUTTON_BOUNCETIME = 200 # Time (in ms) as used for the software bouncetime of the pins
 
 '''
 Value examples
@@ -73,12 +83,15 @@ class MpdGpio:
         
          # Add button callbacks
         GPIO.setup(PIN_PAUZE_PLAY, GPIO.IN)
+        GPIO.setup(PIN_VOLUME_UP, GPIO.IN)
+        GPIO.setup(PIN_VOLUME_DOWN, GPIO.IN)
         GPIO.add_event_detect(PIN_PAUZE_PLAY, GPIO.RISING, callback=self.pauseOrPlay, bouncetime=BUTTON_BOUNCETIME)
+        GPIO.add_event_detect(PIN_VOLUME_UP, GPIO.RISING, callback=self.volumeUp, bouncetime=BUTTON_BOUNCETIME)
+        GPIO.add_event_detect(PIN_VOLUME_DOWN, GPIO.RISING, callback=self.volumeDown, bouncetime=BUTTON_BOUNCETIME)
         
         # Start LCD
         self.screen = Screen(self)
-        print(self.getIpAddress()) 
-        self.screen.setState(STATE_NORMAL)
+        print(self.getIpAddress())
         
         # Start timer
         self.timer = Timer()
@@ -107,6 +120,8 @@ class MpdGpio:
             try:
                 self.status = self.mpd.status()
                 self.song = self.mpd.currentsong()
+                if self.screen.getState() == STATE_STARTUP:
+                    self.screen.setState(STATE_NORMAL)
                 done = True
                 #print(str(self.status))
                 #print(str(self.song))
@@ -128,5 +143,27 @@ class MpdGpio:
                 self.screen.setState(STATE_NORMAL)
                 print('Play')
         
+    def volumeUp(self, channel):
+        if 'volume' in self.status:
+            try:
+                vol = int(self.status['volume'])
+            except:
+                vol = 0
+                
+            if vol < 100:
+                self.mpd.setvol(vol + 1)
+            print('Volume Up: ' + str(vol + 1))
+        
+    def volumeDown(self, channel):
+        if 'volume' in self.status:
+            try:
+                vol = int(self.status['volume'])
+            except:
+                vol = 100
+                
+            if vol > 0:
+                self.mpd.setvol(vol - 1)
+            print('Volume Down: ' + str(vol - 1))
+            
 mpdgpio = MpdGpio()
         

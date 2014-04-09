@@ -5,6 +5,9 @@ STATE_STARTUP = 0;
 STATE_NORMAL = 1;
 STATE_PAUSE = 2;
 
+TEXT_START = 'Starting...'
+TEXT_PAUSE = '|| Pause        '
+
 class Screen:
     """ Mainly the 'view' of this application. Controls the LCD """
     mpdgpio = None
@@ -24,6 +27,9 @@ class Screen:
         self.lcd = LCD(pin_rs=22, pin_e=18, pins_db=[16, 11, 13, 15], GPIO=self.GPIO)
         #self.lcd = LCD(GPIO=self.GPIO)
         self.lcd.begin(16,2)
+        
+    def getState(self):
+        return self.state
         
     def setState(self, state):
         self.oldState = self.state
@@ -54,12 +60,12 @@ class Screen:
     def tickStartup(self):
         if self.oldState != STATE_STARTUP:
             self.lcd.clear()
-            self.lcd.message('Starting...')
+            self.lcd.message(TEXT_START)
             
     def tickPause(self):
         if self.oldState != STATE_PAUSE:
             self.lcd.setCursor(0,0)
-            self.lcd.message('Pause           ')
+            self.lcd.message(TEXT_PAUSE)
                 
     def tickNormal(self):
         if self.displayedSong != self.mpdgpio.song:
