@@ -2,7 +2,7 @@ import RPi.GPIO as GPIO
 import socket
 from mpd import MPDClient, ConnectionError
 from Timer import Timer
-from Screen import *
+from Screen import Screen
 
 ''' MPD settings '''
 MPD_ADDRESS = "localhost"
@@ -21,9 +21,11 @@ POLLING_INTERVAL = 0.5 # Time (in s) between mpd status pollings
 SCREEN_UPDATE_INTERVAL = 1 # Time (in s) between screen updates
 BUTTON_BOUNCETIME = 200 # Time (in ms) as used for the software bouncetime of the pins
 
+
+
 '''
 Value examples
-self.status =
+self.status.mpd =
 {
     'songid': '260', 
     'playlistlength': '194', 
@@ -45,7 +47,7 @@ self.status =
     'nextsongid': '383', 
     'audio': '44100:24:2'
 }
-self.song =
+self.status.song =
 {
     'album': 'All The Little Lights', 
     'artist': 'Passenger', 
@@ -64,14 +66,23 @@ self.song =
 
 
 class MpdGpio:
+    ''' Constants. Don't change! '''
+    STATE_STARTUP = 0;
+    STATE_NORMAL = 1;
+    
     mpd = None
     screen = None
     timer = None
-    status = None
-    song = None
+    status = dict()
+    observers = []
     timer = None
     
+    # Constructor
     def __init__(self):
+        # Set state
+        self.status['state'] = self.STATE_STARTUP
+        
+        # Setup MPD client
         self.mpd = MPDClient()
         self.mpd.timeout = 10  # network timeout in seconds (floats allowed), default: None
         self.mpd.idletimeout = None
@@ -91,18 +102,25 @@ class MpdGpio:
         
         # Start LCD
         self.screen = Screen(self)
+        self.screen.onStatusChange()
+        
         print(self.getIpAddress())
         
         # Start timer
         self.timer = Timer()
-        self.timer.addRepeatingTask(POLLING_INTERVAL, self.mpdUpdateStatus)
-        self.timer.addRepeatingTask(SCREEN_UPDATE_INTERVAL, self.screen.tick)
+        self.timer.addRepeatingTask(POLLING_INTERVAL, self.updateMpdStatus)
+        #self.timer.addRepeatingTask(SCREEN_UPDATE_INTERVAL, self.screen.tick)
         self.timer.start()
         
-        
+    # Getters
+    ''' Get the GPIO interface '''
     def getGPIO(self):
-        return self.GPIO
-        
+        return self.GPIO  
+    
+    def getStatus(self):
+        return self.status      
+    
+    ''' Get the current IP address or None if it doesn't have one '''
     def getIpAddress(self):
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -111,17 +129,25 @@ class MpdGpio:
         except Error as e:
             return None
     
-    def mpdConnect(self):
-        self.mpd.connect(MPD_ADDRESS, MPD_PORT)
+    # Methods
+    ''' Add a state observer to the list of observers. The observer had to have an onStatusChange() callback '''
+    def addObserver(self, observer):
+        self.observers.append(observer)
+    
+    ''' Notify the observers that the status has changed '''
+    def notifyObservers(self):
+        for observer in self.observers:
+            observer.onStatusChange()
         
-    def mpdUpdateStatus(self):
+    def updateMpdStatus(self):
         done = False
         while not done:
             try:
-                self.status = self.mpd.status()
-                self.song = self.mpd.currentsong()
-                if self.screen.getState() == STATE_STARTUP:
-                    self.screen.setState(STATE_NORMAL)
+                self.status['mpd'] = self.mpd.status()
+                self.status['song'] = self.mpd.currentsong()
+                if self.status['state'] == self.STATE_STARTUP:
+                    self.status['state'] = self.STATE_NORMAL
+                self.notifyObservers()
                 done = True
                 #print(str(self.status))
                 #print(str(self.song))
@@ -129,41 +155,54 @@ class MpdGpio:
                 print(str(e))
                 self.mpdConnect()
             
-                
-    
+    def mpdConnect(self):
+        self.mpd.connect(MPD_ADDRESS, MPD_PORT)         
     
     def pauseOrPlay(self, channel):
-        if 'state' in self.status:
-            if self.status['state'] == 'play':
-                self.mpd.pause(1)
-                self.screen.setState(STATE_PAUSE)
-                print('Pause')
+        if 'state' in self.status['mpd']:
+            if self.status['mpd']['state'] == 'play':
+                try:
+                    self.mpd.pause(1)
+                    self.status['mpd']['state'] = 'pause'
+                    print('Pause')
+                except: pass
             else:
-                self.mpd.pause(0)
-                self.screen.setState(STATE_NORMAL)
-                print('Play')
+                try: 
+                    self.mpd.pause(0)
+                    self.status['mpd']['state'] = 'play'
+                    print('Play')
+                except: pass
+            self.notifyObservers()
         
     def volumeUp(self, channel):
         if 'volume' in self.status:
             try:
-                vol = int(self.status['volume'])
+                vol = int(self.status['mpd']['volume'])
             except:
                 vol = 0
                 
             if vol < 100:
-                self.mpd.setvol(vol + 1)
-            print('Volume Up: ' + str(vol + 1))
+                try:
+                    self.mpd.setvol(vol + 1)
+                    self.status['mpd']['volume'] = str(vol+1)
+                    self.notifyObservers()
+                    print('Volume Down: ' + str(vol + 1))
+                except: pass # Sometimes ProtocolError occurs
         
     def volumeDown(self, channel):
         if 'volume' in self.status:
             try:
-                vol = int(self.status['volume'])
+                vol = int(self.status['mpd']['volume'])
             except:
                 vol = 100
-                
+               
             if vol > 0:
-                self.mpd.setvol(vol - 1)
-            print('Volume Down: ' + str(vol - 1))
+                try:
+                    self.mpd.setvol(vol - 1)
+                    self.status['mpd']['volume'] = str(vol-1)
+                    self.notifyObservers()
+                    print('Volume Down: ' + str(vol - 1))
+                except: pass # Sometimes ProtocolError occurs   
             
 mpdgpio = MpdGpio()
         
